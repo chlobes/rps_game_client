@@ -58,14 +58,15 @@ impl Thing for Unit {
 				Melee => "melee",
 				Ranged => "ranged",
 			};
-			draw_string(v2, m.extend(11.0), size / 4.0, format!("class: {}",c));
+			let size = size / 3.5;
+			draw_string(v2, m.extend(11.0), size, format!("class: {}",c));
 			let c = match self.element {
 				Red => "red",
 				Green => "green",
 				Blue => "blue",
 			};
-			draw_string(v2, (m + offset).extend(11.0), size / 4.0, format!("element: {}",c));
-			draw_string(v2, (m + offset * 2.0).extend(11.0), size / 4.0, format!("hp: {:.2}/{:.2}",self.hp,self.max_hp));
+			draw_string(v2, (m + offset).extend(11.0), size, format!("element: {}",c));
+			draw_string(v2, (m + offset * 2.0).extend(11.0), size, format!("hp: {:.2}/{:.2}",self.hp,self.max_hp));
 		}
 	}
 }
@@ -105,15 +106,16 @@ impl Thing for UnitView {
 				Some(Ranged) => "ranged",
 				None => "unknown",
 			};
-			draw_string(v2, m.extend(11.0), size / 4.0, format!("class: {}",c));
+			let size = size / 3.5;
+			draw_string(v2, m.extend(11.0), size, format!("class: {}",c));
 			let c = match self.element {
 				Some(Red) => "red",
 				Some(Green) => "green",
 				Some(Blue) => "blue",
 				None => "unknown",
 			};
-			draw_string(v2, (m + offset).extend(11.0), size / 4.0, format!("element: {}",c));
-			draw_string(v2, (m + offset * 2.0).extend(11.0), size / 4.0, format!("hp: {:.2}/{:.2}",self.hp(),self.max_hp()));
+			draw_string(v2, (m + offset).extend(11.0), size, format!("element: {}",c));
+			draw_string(v2, (m + offset * 2.0).extend(11.0), size, format!("hp: {:.2}/{:.2}",self.hp(),self.max_hp()));
 		}
 	}
 }

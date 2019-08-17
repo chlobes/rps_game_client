@@ -41,6 +41,7 @@ pub fn start() -> Result<(), JsValue> {
 	let move_options: Rc<RefCell<Vec<MoveOption>>> = Rc::new(RefCell::new(Vec::new()));
 	let units: Rc<RefCell<Vec<Unit>>> = Rc::new(RefCell::new(Vec::new()));
 	let opponent = Rc::new(RefCell::new(Vec::new()));
+	let opponent_name = Rc::new(RefCell::new(String::new()));
 	let needs_fight_choice = Rc::new(Cell::new(false));
 	let fight_button = Rc::new(Button {
 		name: "fight".to_string(),
@@ -112,14 +113,15 @@ pub fn start() -> Result<(), JsValue> {
 		if let Some(initial_pos) = b.replace(None) {
 			let mut to = 0;
 			let mut from = 0;
-			let mut p = vec2((-3.5 - 0.1 * 2.5) * UNIT_SIZE.x, -0.1 - UNIT_SIZE.y);
+			let units = units2.borrow();
+			let mut p = vec2((-(units.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, -0.1 - UNIT_SIZE.y);
 			let m = screen_coords(e.client_x(), e.client_y(), &canvas2);
-			for (i, u) in units2.borrow().iter().enumerate() {
+			for (i, u) in units.iter().enumerate() {
 				if u.collides(initial_pos, p) {
 					from = i;
 					let x = (m.x - p.x) / (u.size().x * 1.1);
 					to = (from as isize + x.floor() as isize + 1).max(0) as usize;
-					to = to.min(units2.borrow().len());
+					to = to.min(units.len());
 					break;
 				}
 				p += vec2(u.size().x * 1.1, 0.0);
@@ -154,9 +156,11 @@ pub fn start() -> Result<(), JsValue> {
 	let move_options2 = move_options.clone();
 	let ws2 = ws.clone();
 	let opponent2 = opponent.clone();
+	let opponent_name2 = opponent_name.clone();
 	let needs_fight_choice2 = needs_fight_choice.clone();
 	let onmessage = Closure::wrap(Box::new(move|e: MessageEvent| {
 		let opponent = opponent2.clone();
+		let opponent_name = opponent_name2.clone();
 		let needs_fight_choice = needs_fight_choice2.clone();
 		let document = window().document().unwrap();
 		let units = units2.clone();
@@ -175,15 +179,17 @@ pub fn start() -> Result<(), JsValue> {
 				let units = units.clone();
 				let move_options = move_options.clone();
 				let opponent = opponent.clone();
+				let opponent_name = opponent_name.clone();
 				let needs_fight_choice = needs_fight_choice.clone();
 				let onmessage = move|e: MessageEvent| {
 					let units = units.clone();
 					let move_options = move_options.clone();
 					let opponent = opponent.clone();
+					let opponent_name = opponent_name.clone();
 					let needs_fight_choice = needs_fight_choice.clone();
 					recv(&e, move|p| match p {
 						Team(u) => { units.replace(u); },
-						Opponent(n, view) => { needs_fight_choice.set(n); opponent.replace(view); },
+						Opponent(n, name, view) => { needs_fight_choice.set(n); opponent_name.replace(name); opponent.replace(view); },
 						MoveOptions(o) => { move_options.replace(o); },
 						Message(m) => log!("{}",m),
 						Fight(recording) => {
@@ -246,14 +252,15 @@ pub fn start() -> Result<(), JsValue> {
 			let v = &mut verts;
 			let v2 = &mut verts2;
 			let m = mouse.get();
-			let mut p = vec2((-3.5 - 0.1 * 2.5) * UNIT_SIZE.x, -0.2 - UNIT_SIZE.y);
-			for u in units.borrow().iter() {
+			let units = units.borrow();
+			let mut p = vec2((-(units.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, -0.2 - UNIT_SIZE.y);
+			for u in units.iter() {
 				u.draw(v, v2, p, m, drag_pos.get());
 				p += vec2(u.size().x * 1.1, 0.0);
 			}
 			let opponent = opponent.borrow();
 			if !opponent.is_empty() {
-				let mut p = vec2((-3.5 - 0.1 * 2.5) * UNIT_SIZE.x, 0.2);
+				let mut p = vec2((-(opponent.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, 0.2);
 				for u in opponent.iter() {
 					u.draw(v, v2, p, m, drag_pos.get());
 					p += vec2(u.size().x * 1.1, 0.0);
@@ -262,6 +269,10 @@ pub fn start() -> Result<(), JsValue> {
 					fight_button.draw(v, v2, Vec2::zero(), m, drag_pos.get());
 					do_not_button.draw(v, v2, Vec2::zero(), m, drag_pos.get());
 				}
+				let name = opponent_name.borrow().clone();
+				let size = vec2(0.1, 0.1);
+				let pos: Vec2<f32> = -size * vec2(name.len(), 1).f32() * 0.5 + vec2(0.0, 0.15);
+				vertex::draw_string(v, pos.extend(20.0), size, name);
 			}
 			let move_options = move_options.borrow();
 			if !move_options.is_empty() {
