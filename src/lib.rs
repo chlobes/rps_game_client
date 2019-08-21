@@ -18,7 +18,8 @@ mod thing;
 use thing::*;
 mod collision;
 
-const DEFAULT_IP: &str = "127.0.0.1";
+const DEFAULT_IP: &str = "192.168.1.55";
+const MESSAGE_DURATION: f32 = 30.0;
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -38,6 +39,8 @@ pub fn start() -> Result<(), JsValue> {
 	}).unwrap_or(DEFAULT_IP.to_string());
 	let ws = WebSocket::new(&format!("ws://{}:2794",ip))?;
 	
+	let selected: Rc<RefCell<Option<Box<dyn Thing>>>> = Rc::new(RefCell::new(None));
+	let messages: Rc<RefCell<Vec<(String, f32)>>> = Rc::new(RefCell::new(Vec::new()));
 	let move_options: Rc<RefCell<Vec<MoveOption>>> = Rc::new(RefCell::new(Vec::new()));
 	let units: Rc<RefCell<Vec<Unit>>> = Rc::new(RefCell::new(Vec::new()));
 	let opponent = Rc::new(RefCell::new(Vec::new()));
@@ -60,16 +63,20 @@ pub fn start() -> Result<(), JsValue> {
 	let fight_button2 = fight_button.clone();
 	let do_not_button2 = do_not_button.clone();
 	let move_options2 = move_options.clone();
+	let units2 = units.clone();
 	let ws2 = ws.clone();
+	let selected2 = selected.clone();
 	let needs_fight_choice2 = needs_fight_choice.clone();
 	let onclick = Closure::wrap(Box::new(move|e: MouseEvent| {
 		let m = screen_coords(e.client_x(), e.client_y(), &canvas2);
 		let mut o = move_options2.borrow_mut();
+		let mut selected = selected2.borrow_mut();
+		*selected = None;
 		if needs_fight_choice2.get() {
-			if fight_button2.collides(m, Vec2::zero()) {
+			if fight_button2.collides(m, Vec2::zero()).is_some() {
 				send(&ws2, ClientPacket::Fight(true)).expect(l!());
 				needs_fight_choice2.set(false);
-			} else if do_not_button2.collides(m, Vec2::zero()) {
+			} else if do_not_button2.collides(m, Vec2::zero()).is_some() {
 				send(&ws2, ClientPacket::Fight(false)).expect(l!());
 				needs_fight_choice2.set(false);
 			}
@@ -79,9 +86,10 @@ pub fn start() -> Result<(), JsValue> {
 			let mut p = button_start;
 			let step = o[0].size() * 1.1;
 			for i in 0..o.len() {
-				if o[i].collides(m, p) {
+				if o[i].collides(m, p).is_some() && units2.borrow().len() <= o[i].max_group_size {
 					send(&ws2, ClientPacket::Move(o[i].id)).expect(l!());
 					*o = Vec::new();
+					*selected = o[i].select();
 					break;
 				}
 				if (i+1) % 10 == 0 {
@@ -91,6 +99,20 @@ pub fn start() -> Result<(), JsValue> {
 					p.x += step.x;
 				}
 			}
+		}
+		let m = screen_coords(e.client_x(), e.client_y(), &canvas2);
+		let u = units2.borrow_mut();
+		let mut p = vec2((-(u.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, -0.2 - UNIT_SIZE.y);
+		for i in 0..u.len() {
+			if let Some(x) = u[i].collides(m, p) {
+				if x != 0 {
+					send(&ws2, ClientPacket::PerkChoice(i, x)).expect(l!());
+				} else {
+					*selected = u[i].select();
+				}
+				break;
+			}
+			p += vec2(u[i].size().x * 1.1, 0.0);
 		}
 	}) as Box<dyn Fn(MouseEvent)>);
 	canvas.set_onclick(Some(onclick.as_ref().unchecked_ref()));
@@ -117,7 +139,7 @@ pub fn start() -> Result<(), JsValue> {
 			let mut p = vec2((-(units.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, -0.1 - UNIT_SIZE.y);
 			let m = screen_coords(e.client_x(), e.client_y(), &canvas2);
 			for (i, u) in units.iter().enumerate() {
-				if u.collides(initial_pos, p) {
+				if let Some(0) = u.collides(initial_pos, p) {
 					from = i;
 					let x = (m.x - p.x) / (u.size().x * 1.1);
 					to = (from as isize + x.floor() as isize + 1).max(0) as usize;
@@ -152,6 +174,7 @@ pub fn start() -> Result<(), JsValue> {
 	let g = f.clone();
 	let h = g.clone();
 	
+	let messages2 = messages.clone();
 	let units2 = units.clone();
 	let move_options2 = move_options.clone();
 	let ws2 = ws.clone();
@@ -159,6 +182,7 @@ pub fn start() -> Result<(), JsValue> {
 	let opponent_name2 = opponent_name.clone();
 	let needs_fight_choice2 = needs_fight_choice.clone();
 	let onmessage = Closure::wrap(Box::new(move|e: MessageEvent| {
+		let messages = messages2.clone();
 		let opponent = opponent2.clone();
 		let opponent_name = opponent_name2.clone();
 		let needs_fight_choice = needs_fight_choice2.clone();
@@ -176,12 +200,14 @@ pub fn start() -> Result<(), JsValue> {
 			_ => {
 				let _ = document.get_element_by_id("login box").map(|login_box| login_box.parent_node().unwrap().remove_child(&login_box));
 				document.get_element_by_id("canvas").unwrap().remove_attribute("style").expect("failed to make canvas visible");
+				let messages = messages.clone();
 				let units = units.clone();
 				let move_options = move_options.clone();
 				let opponent = opponent.clone();
 				let opponent_name = opponent_name.clone();
 				let needs_fight_choice = needs_fight_choice.clone();
 				let onmessage = move|e: MessageEvent| {
+					let messages = messages.clone();
 					let units = units.clone();
 					let move_options = move_options.clone();
 					let opponent = opponent.clone();
@@ -191,12 +217,12 @@ pub fn start() -> Result<(), JsValue> {
 						Team(u) => { units.replace(u); },
 						Opponent(n, name, view) => { needs_fight_choice.set(n); opponent_name.replace(name); opponent.replace(view); },
 						MoveOptions(o) => { move_options.replace(o); },
-						Message(m) => log!("{}",m),
+						Message(m) => messages.borrow_mut().push((m, MESSAGE_DURATION)),
 						Fight(recording) => {
 							if recording.won {
-								log!("won fight");
+								messages.borrow_mut().push(("won fight".into(), MESSAGE_DURATION));
 							} else {
-								log!("lost fight");
+								messages.borrow_mut().push(("lost fight".into(), MESSAGE_DURATION));
 							}
 							opponent.replace(Vec::new());
 						},
@@ -252,22 +278,23 @@ pub fn start() -> Result<(), JsValue> {
 			let v = &mut verts;
 			let v2 = &mut verts2;
 			let m = mouse.get();
+			let drag_pos = drag_pos.get();
 			let units = units.borrow();
 			let mut p = vec2((-(units.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, -0.2 - UNIT_SIZE.y);
 			for u in units.iter() {
-				u.draw(v, v2, p, m, drag_pos.get());
+				u.draw(v, v2, p, m, drag_pos);
 				p += vec2(u.size().x * 1.1, 0.0);
 			}
 			let opponent = opponent.borrow();
 			if !opponent.is_empty() {
 				let mut p = vec2((-(opponent.len() as f32 / 2.0) - 0.1 * 2.5) * UNIT_SIZE.x, 0.2);
 				for u in opponent.iter() {
-					u.draw(v, v2, p, m, drag_pos.get());
+					u.draw(v, v2, p, m, drag_pos);
 					p += vec2(u.size().x * 1.1, 0.0);
 				}
 				if needs_fight_choice.get() {
-					fight_button.draw(v, v2, Vec2::zero(), m, drag_pos.get());
-					do_not_button.draw(v, v2, Vec2::zero(), m, drag_pos.get());
+					fight_button.draw(v, v2, Vec2::zero(), m, drag_pos);
+					do_not_button.draw(v, v2, Vec2::zero(), m, drag_pos);
 				}
 				let name = opponent_name.borrow().clone();
 				let size = vec2(0.1, 0.1);
@@ -280,7 +307,7 @@ pub fn start() -> Result<(), JsValue> {
 				let mut p = button_start;
 				let step = move_options[0].size() * 1.1;
 				for i in 0..move_options.len() {
-					move_options[i].draw(v, v2, p, m, drag_pos.get());
+					move_options[i].draw(v, v2, p, m, drag_pos);
 					if (i+1) % 10 == 0 {
 						p.y -= step.y;
 						p.x = button_start.x;
@@ -289,6 +316,22 @@ pub fn start() -> Result<(), JsValue> {
 					}
 				}
 			}
+			let edge = screen_coords(canvas.client_width(), canvas.client_height(), &canvas);
+			let mut messages = messages.borrow_mut();
+			if !messages.is_empty() {
+				if messages[0].1 <= 0.0 {
+					messages.remove(0);
+				}
+				let mut p = edge;
+				let size = vec2(0.06, 0.06);
+				let step = vec2(0.0, size.y * 1.1);
+				for m in messages.iter_mut() {
+					vertex::draw_string_blended(v, (p - vec2(size.x, 0.0) * m.0.len() as f32).extend(30.0), size, m.0.clone(), (m.1 / 2.0).min(1.0), [0.0; 4]);
+					m.1 -= 1.0 / 60.0;
+					p += step;
+				}
+			}
+			selected.borrow().as_ref().map(|s| s.draw(v, v2, edge * vec2(-1.0, 1.0), m, drag_pos));
 		}
 		verts.extend(verts2.drain(..));
 		render(verts, &context);

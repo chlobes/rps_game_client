@@ -9,6 +9,7 @@ pub const STRIDE: i32 = std::mem::size_of::<Vertex>() as i32;
 pub enum Tex {
 	Color([f32; 4]),
 	Texture(usize),
+	Blend([f32; 4], usize, f32),
 }
 
 pub use self::Tex::*;
@@ -53,11 +54,16 @@ pub fn make_quad(pos: Vec3<f32>, mut size: Vec2<f32>, tex: Tex, trans: Mat2<f32>
 	let mut blend = 0.0;
 	let mut uvs = [Vec2::zero(); 6];
 	match tex {
-		Color(rgb) => col = rgb,
+		Color(c) => col = c,
 		Texture(n) => {
 			uvs = quad_uvs(n);
 			blend = 1.0;
-		}
+		},
+		Blend(c, n, b) => {
+			col = c;
+			uvs = quad_uvs(n);
+			blend = b;
+		},
 	}
 	let size = size / 2.0;
 	let pos = pos + size;
@@ -82,6 +88,13 @@ pub fn quad(v: &mut Vec<Vertex>, pos: Vec3<f32>, size: Vec2<f32>, tex: Tex) {
 pub fn draw_string(v: &mut Vec<Vertex>, mut pos: Vec3<f32>, size: Vec2<f32>, s: String) {
 	for c in s.chars() {
 		v.extend_from_slice(&char_uvs(c, make_quad(pos, size, Texture(0), Mat2::ident())));
+		pos.x += size.x;
+	}
+}
+
+pub fn draw_string_blended(v: &mut Vec<Vertex>, mut pos: Vec3<f32>, size: Vec2<f32>, s: String, blend: f32, color: [f32; 4]) {
+	for c in s.chars() {
+		v.extend_from_slice(&char_uvs(c, make_quad(pos, size, Blend(color, 0, blend), Mat2::ident())));
 		pos.x += size.x;
 	}
 }
@@ -133,6 +146,7 @@ fn char_uvs(c: char, mut v: [Vertex; 6]) -> [Vertex; 6] {
 		'/' => 39,
 		'(' => 40,
 		')' => 41,
+		',' => 42,
 		_ => 0,
 	};
 	let s = CHAR_SHEET_LENGTH;
