@@ -4,6 +4,9 @@ use wasm_bindgen::JsCast;
 use web_sys::{WebGlProgram,HtmlImageElement,WebGlShader,HtmlCanvasElement,WebSocket,MessageEvent,Blob,FileReader,Document};
 use js_sys::Uint8Array;
 use crate::vertex::*;
+use std::mem;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering::Relaxed;
 
 pub fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 	window()
@@ -73,26 +76,25 @@ pub fn send(ws: &WebSocket, t: ClientPacket) -> Result<(), JsValue> {
 }
 
 pub fn send_any<T: Serialize>(ws: &WebSocket, t: &T) -> Result<(), JsValue> {
-	let data = serialize(t).unwrap();
+	let data = serialize(t).expect(l!());
 	unsafe {
 		let data = js_sys::Uint8Array::view(&data);
 		ws.send_with_array_buffer_view(&data)
 	}
 }
 
-pub fn recv<F: 'static + FnMut(ServerPacket)>(e: &MessageEvent, mut f: F) {
+pub fn recv<F: 'static + FnOnce(ServerPacket)>(e: &MessageEvent, f: F) {
 	let b = Blob::from(e.data());
 	let r = FileReader::new().expect("failed to create a file reader");
 	let r2 = r.clone();
-	let onload = Closure::wrap(Box::new(move|| {
+	let onload = Closure::once_into_js(Box::new(move|| {
 		let data = Uint8Array::new(&r2.result().unwrap());
 		let mut readable = vec!(0; data.length() as usize);
 		data.copy_to(&mut readable);
 		let p = deserialize(&readable).unwrap();
 		f(p);
-	}) as Box<dyn FnMut()>);
-	r.add_event_listener_with_callback("loadend", onload.as_ref().unchecked_ref()).unwrap();
-	onload.forget();
+	}) as Box<dyn FnOnce()>);
+	r.add_event_listener_with_callback("loadend", onload.unchecked_ref()).unwrap();
 	r.read_as_array_buffer(&b).unwrap();
 }
 
@@ -178,10 +180,12 @@ pub fn setup_rendering(canvas: &HtmlCanvasElement, document: &Document) -> Resul
 	let aspect_ratio_location2 = aspect_ratio_location.clone();
 	let onresize = Closure::wrap(Box::new(move|| {
 		let (w, h) = (body.client_width(), body.client_height());
-		context2.uniform1f(aspect_ratio_location2.as_ref(), h as f32 / w as f32);
 		context2.viewport(0, 0, w, h);
 		canvas2.set_attribute("width",&w.to_string()).expect("failed to set canvas width");
 		canvas2.set_attribute("height",&h.to_string()).expect("failed to set canvas height");
+		let a = w as f32 / h as f32;
+		ASPECT_RATIO.store(unsafe { mem::transmute(a) }, Relaxed);
+		context2.uniform1f(aspect_ratio_location2.as_ref(), a.recip());
 	}) as Box<dyn Fn()>);
 	window().add_event_listener_with_callback("resize",onresize.as_ref().unchecked_ref()).expect("failed to add resize listener");
 	onresize.forget();
@@ -192,8 +196,10 @@ pub fn setup_rendering(canvas: &HtmlCanvasElement, document: &Document) -> Resul
 	let (w, h) = (body.client_width(), body.client_height());
 	canvas.set_attribute("width",&w.to_string()).expect("failed to set canvas width");
 	canvas.set_attribute("height",&h.to_string()).expect("failed to set canvas height");
-	context.uniform1f(aspect_ratio_location.as_ref(), h as f32 / w as f32);
 	context.viewport(0, 0, w, h);
+	let a = w as f32 / h as f32;
+	ASPECT_RATIO.store(unsafe { mem::transmute(a) }, Relaxed);
+	context.uniform1f(aspect_ratio_location.as_ref(), a.recip());
 	
 	context.clear_color(0.0, 0.0, 0.0, 1.0);
 	context.enable(GL::DEPTH_TEST);
@@ -204,9 +210,46 @@ pub fn setup_rendering(canvas: &HtmlCanvasElement, document: &Document) -> Resul
 	Ok(context)
 }
 
+static ASPECT_RATIO: AtomicU32 = AtomicU32::new(unsafe { mem::transmute(1f32) });
+
+pub fn top_edge() -> f32 {
+	1.0
+}
+
+pub fn bottom_edge() -> f32 {
+	-1.0
+}
+
+pub fn left_edge() -> f32 {
+	- unsafe { mem::transmute/*::<_, f32>*/(ASPECT_RATIO.load(Relaxed)) }
+}
+
+pub fn right_edge() -> f32 {
+	unsafe { mem::transmute(ASPECT_RATIO.load(Relaxed)) }
+}
+
 pub fn hash(thing: &[u8]) -> [u64; 4] {
 	use sha3::{Sha3_256,Digest};
 	let mut hasher = Sha3_256::default();
 	hasher.input(thing);
-	unsafe { std::mem::transmute(hasher.result()) }
+	unsafe { mem::transmute(hasher.result()) }
+}
+
+pub fn splittify(s: &mut Vec<char>, max_width: usize) {
+	let mut i = 0;
+	let mut last_nl = 0;
+	let mut last_space = max_width;
+	while i < s.len() {
+		match s[i] {
+			'\n' => { last_nl = i; last_space = i + max_width; },
+			' ' => last_space = i,
+			_ => {},
+		}
+		if last_nl + max_width <= i {
+			s[last_space] = '\n';
+			last_nl = last_space;
+			last_space = i + max_width;
+		}
+		i += 1;
+	}
 }

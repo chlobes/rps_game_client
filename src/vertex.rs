@@ -85,10 +85,19 @@ pub fn quad(v: &mut Vec<Vertex>, pos: Vec3<f32>, size: Vec2<f32>, tex: Tex) {
 	v.extend_from_slice(&make_quad(pos, size, tex, trans));
 }*/
 
-pub fn draw_string(v: &mut Vec<Vertex>, mut pos: Vec3<f32>, size: Vec2<f32>, s: String) {
+pub fn draw_string(v: &mut Vec<Vertex>, pos: Vec3<f32>, size: Vec2<f32>, s: &str, background: Option<(Tex, usize)>) {
+	let lines = s.chars().map(|c| if c == '\n' { 1 } else { 0 }).sum::<usize>() + 1;
+	background.map(|(b, w)| quad(v, pos - vec3(0.0, 0.0, 0.01), size * vec2(w,lines).f32(), b));
+	let mut p = pos;
+	p.y += size.y * (lines-1) as f32;
 	for c in s.chars() {
-		v.extend_from_slice(&char_uvs(c, make_quad(pos, size, Texture(0), Mat2::ident())));
-		pos.x += size.x;
+		if c == '\n' {
+			p.x = pos.x;
+			p.y -= size.y;
+			continue;
+		}
+		v.extend_from_slice(&char_uvs(c, make_quad(p, size, Texture(0), Mat2::ident())));
+		p.x += size.x;
 	}
 }
 
@@ -99,8 +108,8 @@ pub fn draw_string_blended(v: &mut Vec<Vertex>, mut pos: Vec3<f32>, size: Vec2<f
 	}
 }
 
-const CHAR_SHEET_LENGTH: Vec2<usize> = Vec2{ x: 9, y: 6, };
-const CHAR_SHEET_SIZE: Vec2<f32> = Vec2{ x: 9.2, y: 5.5 };
+const CHAR_SHEET_LENGTH: Vec2<usize> = Vec2{ x: 10, y: 6, };
+const CHAR_SHEET_SIZE: Vec2<f32> = Vec2{ x: 10.0, y: 6.0 };
 
 fn char_uvs(c: char, mut v: [Vertex; 6]) -> [Vertex; 6] {
 	let offset = match c {
@@ -147,6 +156,10 @@ fn char_uvs(c: char, mut v: [Vertex; 6]) -> [Vertex; 6] {
 		'(' => 40,
 		')' => 41,
 		',' => 42,
+		'+' => 43,
+		'-' => 44,
+		'?' => 45,
+		'*' => 46,
 		_ => 0,
 	};
 	let s = CHAR_SHEET_LENGTH;

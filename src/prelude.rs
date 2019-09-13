@@ -9,3 +9,5 @@ pub use std::rc::Rc;
 pub use std::cell::RefCell;
 pub use crate::thing::Thing;
 pub use crate::vertex::Tex::*;
+pub use crate::boiler_plate::{top_edge,bottom_edge,left_edge,right_edge};
+pub use crate::collision::*;

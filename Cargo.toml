@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 js-sys = "0.3.25"
 wasm-bindgen = "0.2.47"
+console_error_panic_hook = "0.1.6"
 serde = { version = "1.0.98", features = ["derive"] }
 bincode = "1.1.4"
 sha3 = "0.8.2"
@@ -26,6 +27,8 @@ git = "https://github.com/pypypypypypypypypyp/math_lib"
 [dependencies.web-sys]
 version = "0.3.4"
 features = [
+	'KeyboardEvent',
+	'console',
 	'Location',
 	'ProgressEvent',
 	'FileReader',
