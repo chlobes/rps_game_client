@@ -8,6 +8,8 @@ use std::mem;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering::Relaxed;
 
+const SALT: &[u8] = b"chisps";
+
 pub fn request_animation_frame(f: &Closure<dyn FnMut()>) {
 	window()
 		.request_animation_frame(f.as_ref().unchecked_ref())
@@ -232,6 +234,7 @@ pub fn hash(thing: &[u8]) -> [u64; 4] {
 	use sha3::{Sha3_256,Digest};
 	let mut hasher = Sha3_256::default();
 	hasher.input(thing);
+	hasher.input(SALT);
 	unsafe { mem::transmute(hasher.result()) }
 }
 

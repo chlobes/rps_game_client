@@ -229,9 +229,9 @@ fn draw_equip_mouseover(e: &Equipment, v2: &mut Vec<Vertex>, mut pos: Vec3<f32>,
 	if pos.x + size.x * DESC_WIDTH as f32 > right_edge() || mouseover_shift_left {
 		pos.x -= size.x * DESC_WIDTH as f32;
 	}
-	let n = if e.desc.is_empty() { 0.0 } else {
+	let mut n = if e.desc.is_empty() { 0.0 } else {
 		e.desc.chars().map(|c| if c == '\n' { 1.0 } else { 0.0 }).sum::<f32>() + 1.0
-	};
+	} + e.stat_name1_secondary().is_some() as u8 as f32 + e.stat_name2_secondary().is_some() as u8 as f32;
 	if pos.y + size.y * (n+3.0) > top_edge() {
 		pos.y -= size.y * (n+3.0);
 	}
@@ -240,9 +240,18 @@ fn draw_equip_mouseover(e: &Equipment, v2: &mut Vec<Vertex>, mut pos: Vec3<f32>,
 	if !e.desc.is_empty() {
 		draw_string(v2, pos, size, &e.desc, c);
 	}
-	draw_string(v2, pos + offset * n, size, &format!("durability: {:.3}",e.durability), c);
-	draw_string(v2, pos + offset * (n+1.0), size, &format!("{}: {:.3}",e.stat_name2(),e.stat2), c);
-	draw_string(v2, pos + offset * (n+2.0), size, &format!("{}: {:.3}",e.stat_name1(),e.stat1), c);
+	draw_string(v2, pos + offset * n, size, &format!("repair_cost: {:.3}",e.repair_cost), c);
+	draw_string(v2, pos + offset * (n+1.0), size, &format!("durability: {:.3}",e.durability), c);
+	e.stat_name2_secondary().map(|s| {
+		draw_string(v2, pos + offset * (n+2.0), size, &format!("{}: {:.3}",s,e.stat2.1), c);
+		n += 1.0;
+	});
+	draw_string(v2, pos + offset * (n+2.0), size, &format!("{}: {:.3}",e.stat_name2(),e.stat2.0), c);
+	e.stat_name1_secondary().map(|s| {
+		draw_string(v2, pos + offset * (n+3.0), size, &format!("{}: {:.3}",s,e.stat1.1), c);
+		n += 1.0;
+	});
+	draw_string(v2, pos + offset * (n+3.0), size, &format!("{}: {:.3}",e.stat_name1(),e.stat1.0), c);
 }
 
 impl Thing for (Vec<Perk>, [Option<Equipment>; 4]) {

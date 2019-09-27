@@ -323,7 +323,7 @@ pub fn start() -> Result<(), JsValue> {
 				let t = team2.borrow();
 				if !t.is_empty() {
 					for i in 0..t.len() {
-						if let Some(x) = t[i].collides(m, team_unit_pos(t.len(), i, t[0].size(Vec2::one(), false)), Vec2::one(), false) {
+						if let Some(x) = t[i].collides(m, team_unit_pos(t.len(), i, t[0].size(Vec2::one(), false)), Vec2::one(), state.is_safe_zone()) {
 							clicked = true;
 							if x == 0 {
 								*selected = t[i].select(false).map(|s| (s, Some(InventoryType::Team(i))));
@@ -821,10 +821,10 @@ pub fn start() -> Result<(), JsValue> {
 					p.y += TEXT_SIZE.y * 1.1;
 				}
 			}
-			draw_string(v2, (vec2(left_edge(), top_edge()) + vec2(TEXT_SIZE.x, -TEXT_SIZE.y) * 1.1).extend(30.0), TEXT_SIZE, &format!("gold: {:.2}",gold.get()), None);
+			draw_string(v2, (vec2(left_edge(), top_edge()) + vec2(TEXT_SIZE.x, -TEXT_SIZE.y) * 1.1).extend(0.0), TEXT_SIZE, &format!("gold: {:.2}",gold.get()), None);
 			if state.is_safe_zone() {
 				let s = format!("knife juice: {:.2}",juice.get());
-				draw_string(v2, (vec2(right_edge() - (s.len() as f32 + 1.1) * TEXT_SIZE.x, safe_equip_box_pos().y - TEXT_SIZE.y)).extend(30.0), TEXT_SIZE, &s, None);
+				draw_string(v2, (vec2(right_edge() - (s.len() as f32 + 1.1) * TEXT_SIZE.x, safe_equip_box_pos().y - TEXT_SIZE.y)).extend(0.0), TEXT_SIZE, &s, None);
 			}
 			selected.borrow().as_ref().map(|(s, i)| s.draw(v, v2, vec2(left_edge(), bottom_edge()), Vec2::one(), m, d, i.is_some()));
 			let e = equipment.borrow();
