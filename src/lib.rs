@@ -53,7 +53,9 @@ pub fn start() -> Result<(), JsValue> {
 	let context = setup_rendering(&canvas, &document)?;
 	let ip = window().location().href().map_err(|_| ()).and_then(|s| {
 		let mut s = s.split('?'); s.next();	s.next().and_then(|s| s.find("ip=").map(|i| {	let s = s.split_at(i+3).1; s.split('&').next().expect(l!()).to_string()	})).ok_or(())	}).unwrap_or(DEFAULT_IP.to_string());
-	let ws = WebSocket::new(&format!("ws://{}:2794",ip))?;
+	log!("1");
+	let ws = WebSocket::new(&format!("wss://{}:2794",ip))?;
+	log!("2");
 	
 	let depth = Rc::new(Cell::new(0usize));
 	let gold = Rc::new(Cell::new(0f64));
